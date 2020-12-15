@@ -35,11 +35,13 @@ macro_rules! log {
 }
 
 /// Returns a WebGL Context
-fn get_canvas() -> Result<HtmlCanvasElement, JsValue> {
+fn get_canvas(id: &str) -> Result<HtmlCanvasElement, JsValue> {
     utils::set_panic_hook();
 
     let doc = window().unwrap().document().unwrap();
-    let canvas = doc.get_element_by_id("area").unwrap();
+    let canvas = doc
+        .get_element_by_id(id)
+        .expect(&format!("Failed to get canvas: {}", id));
     let canvas: HtmlCanvasElement = canvas.dyn_into::<HtmlCanvasElement>()?;
     canvas.set_width(canvas.client_width() as u32);
     canvas.set_height(canvas.client_height() as u32);
@@ -54,7 +56,7 @@ fn get_gl_context(canvas: &HtmlCanvasElement) -> Result<GL, JsValue> {
 /// Short WebGL program which simply clears a drawing area specified by a canvas tag
 #[wasm_bindgen]
 pub fn clear_drawing_area() -> Result<(), JsValue> {
-    let canvas = get_canvas().unwrap();
+    let canvas = get_canvas("area").unwrap();
     let gl = get_gl_context(&canvas)?;
 
     gl.clear_color(0.0, 0.0, 0.0, 1.0);
@@ -687,8 +689,12 @@ impl Texture {
             .tex_parameteri(GL::TEXTURE_2D, GL::TEXTURE_MAG_FILTER, GL::LINEAR as i32);
 
         //    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-        texture.gl.tex_parameteri(GL::TEXTURE_2D, GL::TEXTURE_WRAP_S, GL::CLAMP_TO_EDGE as i32);
-        texture.gl.tex_parameteri(GL::TEXTURE_2D, GL::TEXTURE_WRAP_T, GL::CLAMP_TO_EDGE as i32);
+        texture
+            .gl
+            .tex_parameteri(GL::TEXTURE_2D, GL::TEXTURE_WRAP_S, GL::CLAMP_TO_EDGE as i32);
+        texture
+            .gl
+            .tex_parameteri(GL::TEXTURE_2D, GL::TEXTURE_WRAP_T, GL::CLAMP_TO_EDGE as i32);
 
         texture.upload(Some(&image.data), image.width, image.height);
 
@@ -927,11 +933,11 @@ impl Context {
         let window = web_sys::window().unwrap();
         let performance = window.performance().unwrap();
 
-        let canvas = get_canvas()?;
+        let canvas = get_canvas("area")?;
         let gl = get_gl_context(&canvas)?;
 
         //let offscreen_framebuffer =
-            //create_offscreen_framebuffer(&gl, canvas.width() as i32, canvas.height() as i32);
+        //create_offscreen_framebuffer(&gl, canvas.width() as i32, canvas.height() as i32);
 
         let select_framebuffer =
             create_select_framebuffer(&gl, canvas.width() as i32, canvas.height() as i32);
@@ -942,7 +948,7 @@ impl Context {
 
         // OpenGL uses a right-handed coordinate system
         let view = Rc::new(RefCell::new(Isometry3::look_at_rh(
-            &Point3::new(0.0, 0.0, 12.0),
+            &Point3::new(0.0, 0.0, 6.0),
             &Point3::origin(),
             &Vector3::y_axis(),
         )));
@@ -1063,8 +1069,8 @@ impl Context {
 
                 mouse.prev = mouse.pos;
 
-                mouse.pos.x = e.client_x();
-                mouse.pos.y = height - e.client_y();
+                mouse.pos.x = e.offset_x();
+                mouse.pos.y = height - e.offset_y();
 
                 mouse.drag.x += mouse.pos.x - mouse.prev.x;
                 mouse.drag.y += mouse.pos.y - mouse.prev.y;
@@ -1248,7 +1254,7 @@ impl Context {
         let sampler_loc = self.default_pipeline.program.get_uniform_loc("tex_sampler");
         self.gl.uniform1i(sampler_loc.as_ref(), 0);
 
-        self.gl.clear_color(0.2, 0.2, 0.3, 1.0);
+        self.gl.clear_color(0.9, 0.9, 0.9, 1.0);
         self.gl.clear(GL::COLOR_BUFFER_BIT);
         self.gl.clear(GL::DEPTH_BUFFER_BIT);
 
@@ -1394,5 +1400,142 @@ impl Context {
         for child in &node.children {
             self.draw_select_node(now, child, &transform);
         }
+    }
+
+    pub fn new_teaser() -> Result<Context, JsValue> {
+        let window = web_sys::window().unwrap();
+        let performance = window.performance().unwrap();
+
+        let canvas = get_canvas("teaser")?;
+        let gl = get_gl_context(&canvas)?;
+
+        //let offscreen_framebuffer =
+        //create_offscreen_framebuffer(&gl, canvas.width() as i32, canvas.height() as i32);
+
+        let select_framebuffer =
+            create_select_framebuffer(&gl, canvas.width() as i32, canvas.height() as i32);
+
+        let point_pipeline = create_point_program(&gl);
+        let default_pipeline = create_default_program(&gl);
+        let mut select_pipeline = SelectPipeline::new(&gl);
+
+        // OpenGL uses a right-handed coordinate system
+        let view = Rc::new(RefCell::new(Isometry3::look_at_rh(
+            &Point3::new(0.0, 0.0, 3.0),
+            &Point3::origin(),
+            &Vector3::y_axis(),
+        )));
+
+        let mut nodes = vec![];
+
+        let cube = Geometry::cube();
+
+        let mut root = Node::new(Primitive::new(gl.clone(), &cube));
+        root.transform
+            .append_translation_mut(&Translation3::new(0.0, 0.0, 0.0));
+
+        // Create select color for each node
+        let mut rng = rand::thread_rng();
+        generate_node_colors(&mut select_pipeline, &mut rng, &root);
+
+        nodes.push(root);
+
+        let texture = Texture::new(gl.clone());
+
+        // @todo Extract to function: Create GUI
+        let gui = Gui::new(&gl, canvas.width(), canvas.height());
+
+        let ret = Context {
+            performance,
+            canvas,
+            gl,
+            view,
+            mouse: Rc::new(RefCell::new(Mouse::new())),
+            offscreen_framebuffer: select_framebuffer,
+            point_pipeline,
+            default_pipeline,
+            select_pipeline,
+            nodes,
+            texture,
+
+            gui: Rc::new(RefCell::new(gui)),
+        };
+
+        Ok(ret)
+    }
+
+    /// Draws the scene
+    pub fn draw_teaser(&self) -> Result<(), JsValue> {
+        //self.handle_input()?;
+        // After using input, reset its state
+        self.mouse.borrow_mut().reset();
+
+        // Set graphics state
+        self.gl.enable(GL::DEPTH_TEST);
+        self.gl.enable(GL::BLEND);
+        self.gl.blend_func(GL::SRC_ALPHA, GL::ONE_MINUS_SRC_ALPHA);
+
+        self.default_pipeline.program.bind();
+
+        // View
+        let view_loc = self.default_pipeline.program.get_uniform_loc("view");
+
+        self.gl.uniform_matrix4fv_with_f32_array(
+            view_loc.as_ref(),
+            false,
+            self.view.borrow().to_homogeneous().as_slice(),
+        );
+
+        // Proj
+        let proj_loc = self.default_pipeline.program.get_uniform_loc("proj");
+
+        let width = self.canvas.width() as f32;
+        let height = self.canvas.height() as f32;
+        let proj = nalgebra::Perspective3::new(width / height, 3.14 / 4.0, 0.125, 256.0);
+        self.gl.uniform_matrix4fv_with_f32_array(
+            proj_loc.as_ref(),
+            false,
+            proj.to_homogeneous().as_slice(),
+        );
+
+        // Lighting
+        let light_color_loc = self.default_pipeline.program.get_uniform_loc("light_color");
+        self.gl.uniform3f(light_color_loc.as_ref(), 1.0, 1.0, 1.0);
+
+        let light_position_loc = self
+            .default_pipeline
+            .program
+            .get_uniform_loc("light_position");
+        self.gl
+            .uniform3f(light_position_loc.as_ref(), 4.0, 1.0, 1.0);
+
+        // Texture
+        self.texture.bind();
+        let sampler_loc = self.default_pipeline.program.get_uniform_loc("tex_sampler");
+        self.gl.uniform1i(sampler_loc.as_ref(), 0);
+
+        self.gl.clear_color(1.0, 1.0, 1.0, 1.0);
+        self.gl.clear(GL::COLOR_BUFFER_BIT);
+        self.gl.clear(GL::DEPTH_BUFFER_BIT);
+
+        // Time
+        let now = self.performance.now();
+
+        let mut transform = Isometry3::<f32>::identity();
+        let rotation =
+            UnitQuaternion::<f32>::from_axis_angle(&Vector3::z_axis(), now as f32 / 4096.0);
+        transform.append_rotation_mut(&rotation);
+        let rotation =
+            UnitQuaternion::<f32>::from_axis_angle(&Vector3::y_axis(), now as f32 / 4096.0);
+        transform.append_rotation_mut(&rotation);
+
+        // Draw all nodes
+        for node in &self.nodes {
+            self.draw_node(now as f32, &node, &transform);
+        }
+
+        self.gui.borrow().draw();
+
+        Ok(())
     }
 }
