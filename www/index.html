@@ -72,6 +72,12 @@ Collabora Ltd.
 
 - `<canvas>` as drawing area
 - `index.js` responsible for calling `requestAnimationFrame(callback)`
+- ```
+  #[wasm_bindgen]
+  pub fn hello_from_rust() {
+      alert("Hello from Rust!");
+  }
+  ```
 - WebGL context can be created in Rust
 
 ---
