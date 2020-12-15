@@ -1,27 +1,98 @@
 <!DOCTYPE html>
 <html>
   <head>
+    <title>Rust+Wasm+WebGL</title>
+    <meta charset="utf-8">
     <style>
-      html {
-        height: 100%;
+      @import url(https://fonts.googleapis.com/css?family=Karla);
+      @import url(https://fonts.googleapis.com/css?family=Droid+Serif:400,700,400italic);
+      @import url(https://fonts.googleapis.com/css?family=Ubuntu+Mono:400,700,400italic);
+
+      body { font-family: 'Karla'; }
+      h1, h2, h3 {
+        font-family: 'Karla';
+        font-weight: normal;
       }
-      body {
-        background-color: black;
-        height: 100%;
-        margin: 0px;
-      }
-      #area {
-        display: block;
-        margin: auto;
-        width: 100%;
-        height: 100%;
+      .remark-code, .remark-inline-code { font-family: 'Ubuntu Mono'; }
+      code { background-color: #ddd; }
+      .remark-slide-content {
+          font-size: 24px;
       }
     </style>
-    <meta charset="utf-8">
-    <title>Rust+WebGL</title>
   </head>
   <body>
-    <canvas id="area"></canvas>
+    <textarea id="source">
+
+class: center, middle
+
+# Rust+Wasm+WebGL
+
+Mainly learn, and possibly create interesting interactive 3D demos for the web
+
+<canvas class="teaser"></canvas>
+
+Antonio Caggiano
+
+Collabora Ltd.
+
+---
+
+# Setup
+
+- https://rustwasm.github.io/docs/book/game-of-life/setup.html
+- rustup, rustc, cargo
+- wasm-pack
+- cargo-generate
+- npm
+
+---
+
+# Project
+
+1. `cargo generate –git https://github.com/rustwasm/wasm-pack-template`
+2. `npm init wasm-app www`
+3. `cd wasm-pack-template && wasm-pack build`
+4. `cd www && npm install && npm run start`
+
+---
+
+# HTML + JavaScript + WebGL
+
+- `<canvas>` as drawing area
+- `index.js` responsible for calling `requestAnimationFrame(callback)`
+- WebGL context can be created in Rust
+
+---
+
+# web_sys
+
+- https://rustwasm.github.io/docs/wasm-bindgen/web-sys/index.html
+- Access to document, window, Web APIs
+- Heavy use of features for faster build times
+- Rust-analyzer unfriendly
+- Web function overloads means multiple Rust functions
+- Some Web functions expect JS values
+
+---
+
+# Demo
+
+<canvas id="area"></canvas>
+
+---
+
+# References
+
+- https://github.com/lykhouzov/rust-wasm-webgl
+- https://rustwasm.github.io/docs/book/
+- https://rustwasm.github.io/docs/wasm-bindgen/introduction.html
+
+    </textarea>
+    <script src="https://remarkjs.com/downloads/remark-latest.min.js">
+    </script>
+    <script>
+      var slideshow = remark.create();
+    </script>
     <script src="./bootstrap.js"></script>
   </body>
 </html>
