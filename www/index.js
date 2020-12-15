@@ -15,13 +15,13 @@ const tick = () => {
     requestAnimationFrame(tick);
 }
 
-function start_demo() {
-    if (ctx == null) {
-        ctx = webgl.Context.new();
-    }
-    requestAnimationFrame(tick);
-}
-
 var button = document.getElementById("start")
 button.addEventListener("click", start_demo)
 
+function start_demo() {
+    if (ctx == null) {
+        ctx = webgl.Context.new();
+        button.style.display = "none"
+    }
+    requestAnimationFrame(tick);
+}
